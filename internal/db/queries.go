@@ -605,6 +605,170 @@ func scanRuns(rows *sql.Rows) ([]models.Run, error) {
 	return runs, rows.Err()
 }
 
+// --- Run Evaluations ---
+
+func (d *DB) UpsertRunEvaluation(e *models.RunEvaluation) error {
+	missed := strings.Join(e.MissedCriteria, "\n")
+	unrequested := strings.Join(e.UnrequestedChanges, "\n")
+	var fid, conf any
+	if e.Fidelity != nil {
+		fid = *e.Fidelity
+	}
+	if e.Confidence != nil {
+		conf = *e.Confidence
+	}
+	_, err := d.Exec(`INSERT INTO run_evaluations
+		(run_id, fidelity, scope_drift, missed_criteria, unrequested_changes, confidence, judge_model, judge_error,
+		 n_reads_before_first_write, n_retries, n_tool_kinds, time_to_first_edit_ms, escalation_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+		  fidelity=excluded.fidelity,
+		  scope_drift=excluded.scope_drift,
+		  missed_criteria=excluded.missed_criteria,
+		  unrequested_changes=excluded.unrequested_changes,
+		  confidence=excluded.confidence,
+		  judge_model=excluded.judge_model,
+		  judge_error=excluded.judge_error,
+		  n_reads_before_first_write=excluded.n_reads_before_first_write,
+		  n_retries=excluded.n_retries,
+		  n_tool_kinds=excluded.n_tool_kinds,
+		  time_to_first_edit_ms=excluded.time_to_first_edit_ms,
+		  escalation_count=excluded.escalation_count`,
+		e.RunID, fid, e.ScopeDrift, missed, unrequested, conf, e.JudgeModel, e.JudgeError,
+		e.NReadsBeforeFirstWrite, e.NRetries, e.NToolKinds, e.TimeToFirstEditMs, e.EscalationCount)
+	return err
+}
+
+func (d *DB) GetRunEvaluation(runID string) (*models.RunEvaluation, error) {
+	e := &models.RunEvaluation{RunID: runID}
+	var fid, conf sql.NullFloat64
+	var missed, unrequested string
+	var createdAt DBTime
+	err := d.QueryRow(`SELECT fidelity, scope_drift, missed_criteria, unrequested_changes, confidence,
+		judge_model, judge_error, n_reads_before_first_write, n_retries, n_tool_kinds,
+		time_to_first_edit_ms, escalation_count, created_at
+		FROM run_evaluations WHERE run_id=?`, runID).Scan(
+		&fid, &e.ScopeDrift, &missed, &unrequested, &conf,
+		&e.JudgeModel, &e.JudgeError, &e.NReadsBeforeFirstWrite, &e.NRetries, &e.NToolKinds,
+		&e.TimeToFirstEditMs, &e.EscalationCount, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	if fid.Valid {
+		v := fid.Float64
+		e.Fidelity = &v
+	}
+	if conf.Valid {
+		v := conf.Float64
+		e.Confidence = &v
+	}
+	if missed != "" {
+		e.MissedCriteria = strings.Split(missed, "\n")
+	}
+	if unrequested != "" {
+		e.UnrequestedChanges = strings.Split(unrequested, "\n")
+	}
+	e.CreatedAt = createdAt.Time
+	return e, nil
+}
+
+// ArchetypeAlignment is one row of per-archetype run-evaluation aggregates.
+type ArchetypeAlignment struct {
+	ArchetypeSlug    string
+	RunCount         int
+	JudgedCount      int
+	AvgFidelity      float64 // -1 when no judged runs
+	AvgConfidence    float64 // -1 when no judged runs
+	AvgRetries       float64
+	AvgToolKinds     float64
+	AvgReadsPreWrite float64
+}
+
+// EvaluatedRun joins runs + run_evaluations + agents for the recent-runs list.
+type EvaluatedRun struct {
+	RunID         string
+	AgentName     string
+	ArchetypeSlug string
+	IssueKey      string
+	Status        string
+	Fidelity      *float64
+	ScopeDrift    string
+	JudgeError    string
+	NRetries      int
+	NToolKinds    int
+	CreatedAt     time.Time
+}
+
+func (d *DB) AggregateAlignmentByArchetype() ([]ArchetypeAlignment, error) {
+	rows, err := d.Query(`
+		SELECT
+			a.archetype_slug,
+			COUNT(*) AS runs,
+			SUM(CASE WHEN re.fidelity IS NOT NULL THEN 1 ELSE 0 END) AS judged,
+			COALESCE(AVG(re.fidelity), -1) AS avg_fidelity,
+			COALESCE(AVG(re.confidence), -1) AS avg_conf,
+			COALESCE(AVG(re.n_retries), 0) AS avg_retries,
+			COALESCE(AVG(re.n_tool_kinds), 0) AS avg_kinds,
+			COALESCE(AVG(re.n_reads_before_first_write), 0) AS avg_reads
+		FROM run_evaluations re
+		JOIN runs r ON r.id = re.run_id
+		JOIN agents a ON a.id = r.agent_id
+		GROUP BY a.archetype_slug
+		ORDER BY a.archetype_slug`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ArchetypeAlignment
+	for rows.Next() {
+		var a ArchetypeAlignment
+		if err := rows.Scan(&a.ArchetypeSlug, &a.RunCount, &a.JudgedCount,
+			&a.AvgFidelity, &a.AvgConfidence, &a.AvgRetries, &a.AvgToolKinds, &a.AvgReadsPreWrite); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) ListRecentEvaluatedRuns(limit int) ([]EvaluatedRun, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := d.Query(`
+		SELECT re.run_id, COALESCE(a.name,''), COALESCE(a.archetype_slug,''),
+		       COALESCE(r.issue_key,''), r.status, re.fidelity, COALESCE(re.scope_drift,''),
+		       COALESCE(re.judge_error,''), re.n_retries, re.n_tool_kinds, re.created_at
+		FROM run_evaluations re
+		JOIN runs r ON r.id = re.run_id
+		LEFT JOIN agents a ON a.id = r.agent_id
+		ORDER BY re.created_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []EvaluatedRun
+	for rows.Next() {
+		var er EvaluatedRun
+		var fid sql.NullFloat64
+		var createdAt DBTime
+		if err := rows.Scan(&er.RunID, &er.AgentName, &er.ArchetypeSlug, &er.IssueKey, &er.Status,
+			&fid, &er.ScopeDrift, &er.JudgeError, &er.NRetries, &er.NToolKinds, &createdAt); err != nil {
+			return nil, err
+		}
+		if fid.Valid {
+			v := fid.Float64
+			er.Fidelity = &v
+		}
+		er.CreatedAt = createdAt.Time
+		out = append(out, er)
+	}
+	return out, rows.Err()
+}
+
 // --- Comments ---
 
 func (d *DB) CreateComment(c *models.Comment) error {

@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/msoedov/mesa/internal/archetypes"
 	"github.com/msoedov/mesa/internal/db"
+	"github.com/msoedov/mesa/internal/evaluator"
 	"github.com/msoedov/mesa/internal/models"
 )
 
@@ -383,9 +384,32 @@ func (s *Scheduler) spawnAgent(agent *models.Agent, issueKey, mode, prompt strin
 			}
 			s.onRunComplete(finalRun)
 		}
+
+		// Approach A+B run evaluation (feature-flagged). Async to keep cron loop responsive.
+		if s.db.IsFeatureEnabled("run_alignment") && mode == "task" {
+			go s.evaluateRun(runID, agent.ID)
+		}
 	}()
 
 	return runID
+}
+
+// evaluateRun runs the post-completion judge + signature pipeline.
+// Re-reads the run from DB to get the final stdout/diff captured by CompleteRun.
+func (s *Scheduler) evaluateRun(runID, agentID string) {
+	finalRun, err := s.db.GetRun(runID)
+	if err != nil {
+		slog.Error("scheduler: evaluator could not load run", "run_id", runID, "error", err)
+		return
+	}
+	agent, err := s.db.GetAgent(agentID)
+	if err != nil {
+		slog.Error("scheduler: evaluator could not load agent", "agent_id", agentID, "error", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	evaluator.Evaluate(ctx, s.db, finalRun, agent)
 }
 
 func (s *Scheduler) execClaudeCode(ctx context.Context, agent *models.Agent, apiKey, runID, issueKey, prompt string) (string, error) {

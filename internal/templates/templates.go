@@ -47,6 +47,7 @@ func Parse() (*template.Template, error) {
 		"activity.html",
 		"crons.html",
 		"settings.html",
+		"observability.html",
 		"not_found.html",
 	}
 
@@ -86,6 +87,7 @@ var funcMap = template.FuncMap{
 	"formatTokens":   formatTokens,
 	"truncate":       truncate,
 	"deref":          deref,
+	"derefFloat":     derefFloat,
 	"extractProject": extractProject,
 	"diffLines":      diffLines,
 	"nl2br":          nl2br,
@@ -456,6 +458,13 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func derefFloat(f *float64) float64 {
+	if f == nil {
+		return -1
+	}
+	return *f
 }
 
 type DiffLine struct {

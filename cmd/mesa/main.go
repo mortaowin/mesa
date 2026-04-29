@@ -316,6 +316,7 @@ func main() {
 	mux.HandleFunc("POST /crons/{id}", ui.CronAction)
 	mux.HandleFunc("GET /runs/{id}", ui.RunDetail)
 	mux.HandleFunc("GET /runs/{id}/stdout", ui.RunStdout)
+	mux.HandleFunc("GET /observability", ui.Observability)
 	mux.HandleFunc("GET /search", ui.SearchIssuesAndAgents)
 	mux.HandleFunc("GET /events", sse.ServeHTTP)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))

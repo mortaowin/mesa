@@ -59,6 +59,65 @@
       </div>
     </div>
 
+    {{if .Evaluation}}
+    <!-- Run Alignment (intent vs outcome judge + trajectory signature) -->
+    <div class="bg-card border border-bd rounded-lg p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-[13px] font-medium text-ink2">Run Alignment</h3>
+        {{if .Evaluation.JudgeModel}}<span class="text-[11px] text-ink3/40 font-mono">{{.Evaluation.JudgeModel}}</span>{{end}}
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Fidelity</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{if .Evaluation.Fidelity}}{{printf "%.2f" (derefFloat .Evaluation.Fidelity)}}{{else}}&mdash;{{end}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Scope drift</div>
+          <div class="text-sm font-semibold text-ink mt-1">{{if .Evaluation.ScopeDrift}}{{.Evaluation.ScopeDrift}}{{else}}&mdash;{{end}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Confidence</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{if .Evaluation.Confidence}}{{printf "%.2f" (derefFloat .Evaluation.Confidence)}}{{else}}&mdash;{{end}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Tool kinds</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{.Evaluation.NToolKinds}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Reads before write</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{.Evaluation.NReadsBeforeFirstWrite}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Retries</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{.Evaluation.NRetries}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Escalations</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{.Evaluation.EscalationCount}}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-ink3/50 uppercase tracking-wider">Time to first edit</div>
+          <div class="text-sm font-semibold text-ink mt-1 tabular-nums">{{if .Evaluation.TimeToFirstEditMs}}{{.Evaluation.TimeToFirstEditMs}}ms{{else}}&mdash;{{end}}</div>
+        </div>
+      </div>
+      {{if .Evaluation.MissedCriteria}}
+      <div class="mt-3">
+        <div class="text-[11px] text-ink3/50 uppercase tracking-wider mb-1">Missed criteria</div>
+        <ul class="text-[13px] text-ink2 list-disc pl-5 space-y-0.5">{{range .Evaluation.MissedCriteria}}<li>{{.}}</li>{{end}}</ul>
+      </div>
+      {{end}}
+      {{if .Evaluation.UnrequestedChanges}}
+      <div class="mt-3">
+        <div class="text-[11px] text-ink3/50 uppercase tracking-wider mb-1">Unrequested changes</div>
+        <ul class="text-[13px] text-ink2 list-disc pl-5 space-y-0.5">{{range .Evaluation.UnrequestedChanges}}<li>{{.}}</li>{{end}}</ul>
+      </div>
+      {{end}}
+      {{if .Evaluation.JudgeError}}
+      <div class="mt-3 text-[11px] text-red-400">Judge error: {{.Evaluation.JudgeError}}</div>
+      {{end}}
+    </div>
+    {{end}}
+
     <!-- Live Stdout -->
     <div class="mb-6">
       <div class="flex items-center justify-between mb-2">

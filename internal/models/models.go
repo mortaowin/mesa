@@ -199,6 +199,25 @@ type Run struct {
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
+// RunEvaluation combines Approach A (judge rubric) and Approach B (trajectory signature).
+// One row per run, keyed by run_id. fidelity/scope_drift/etc. may be empty when judge is disabled or failed.
+type RunEvaluation struct {
+	RunID                   string    `json:"run_id"`
+	Fidelity                *float64  `json:"fidelity,omitempty"`
+	ScopeDrift              string    `json:"scope_drift,omitempty"`
+	MissedCriteria          []string  `json:"missed_criteria,omitempty"`
+	UnrequestedChanges      []string  `json:"unrequested_changes,omitempty"`
+	Confidence              *float64  `json:"confidence,omitempty"`
+	JudgeModel              string    `json:"judge_model,omitempty"`
+	JudgeError              string    `json:"judge_error,omitempty"`
+	NReadsBeforeFirstWrite  int       `json:"n_reads_before_first_write"`
+	NRetries                int       `json:"n_retries"`
+	NToolKinds              int       `json:"n_tool_kinds"`
+	TimeToFirstEditMs       int       `json:"time_to_first_edit_ms"`
+	EscalationCount         int       `json:"escalation_count"`
+	CreatedAt               time.Time `json:"created_at"`
+}
+
 type Comment struct {
 	ID        string    `json:"id"`
 	IssueKey  string    `json:"issue_key"`

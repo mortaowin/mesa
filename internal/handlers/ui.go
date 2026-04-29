@@ -1014,11 +1014,14 @@ func (u *UI) RunDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	eval, _ := u.db.GetRunEvaluation(run.ID)
+
 	u.render(w, "run_detail", map[string]any{
 		"Run":             run,
 		"Agent":           agent,
 		"ParentIssueKey":  parentIssueKey,
 		"FormattedStdout": template.HTML(formatStreamJSON(run.Stdout, run.Status)),
+		"Evaluation":      eval,
 	})
 }
 
@@ -1530,6 +1533,19 @@ func (u *UI) deletePolicyFile(dir, filename string) {
 	os.Remove(filepath.Join(base, dir, filename))
 }
 
+func (u *UI) Observability(w http.ResponseWriter, r *http.Request) {
+	if !u.db.IsFeatureEnabled("run_alignment") {
+		http.NotFound(w, r)
+		return
+	}
+	rollups, _ := u.db.AggregateAlignmentByArchetype()
+	recent, _ := u.db.ListRecentEvaluatedRuns(50)
+	u.render(w, "observability", map[string]any{
+		"Rollups": rollups,
+		"Recent":  recent,
+	})
+}
+
 func (u *UI) Settings(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		u.saveSettings(w, r)
@@ -1578,7 +1594,7 @@ func (u *UI) saveSettings(w http.ResponseWriter, r *http.Request) {
 	case "discord":
 		keys = []string{"discord_webhook_url"}
 	case "feature_flags":
-		for _, flag := range []string{"feature_supermemory", "feature_telegram", "feature_discord"} {
+		for _, flag := range []string{"feature_supermemory", "feature_telegram", "feature_discord", "feature_run_alignment"} {
 			val := "false"
 			if r.FormValue(flag) == "on" {
 				val = "true"
@@ -1810,6 +1826,9 @@ func (u *UI) render(w http.ResponseWriter, name string, data any) {
 	if m, ok := data.(map[string]any); ok {
 		if _, exists := m["IsPaused"]; !exists {
 			m["IsPaused"] = u.IsPaused()
+		}
+		if _, exists := m["FeatureRunAlignment"]; !exists {
+			m["FeatureRunAlignment"] = u.db.IsFeatureEnabled("run_alignment")
 		}
 	}
 	var buf bytes.Buffer

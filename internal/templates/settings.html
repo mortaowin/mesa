@@ -105,6 +105,13 @@
             </div>
             <input type="checkbox" name="feature_discord" {{if eq (index .Settings "feature_discord") "true"}}checked{{end}} class="w-4 h-4 accent-ac rounded">
           </label>
+          <label class="flex items-center justify-between cursor-pointer">
+            <div>
+              <span class="text-sm text-ink">Run alignment</span>
+              <p class="text-[11px] text-ink3/40">Per-run intent-vs-outcome judge (Sonnet via claude CLI) + trajectory signature.</p>
+            </div>
+            <input type="checkbox" name="feature_run_alignment" {{if eq (index .Settings "feature_run_alignment") "true"}}checked{{end}} class="w-4 h-4 accent-ac rounded">
+          </label>
         </div>
         <div class="mt-4 flex justify-end">
           <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-ac text-ink hover:bg-ac-h active:scale-[0.97] transition-all">Save Feature Flags</button>

@@ -1,0 +1,91 @@
+{{template "head" .}}
+{{template "nav" .}}
+<main class="flex-1 ml-0 md:ml-56 p-8 pt-16 md:pt-8 mt-[3px]">
+  <div class="max-w-layout mx-auto">
+
+    <h1 class="text-lg font-semibold text-ink tracking-tight mb-1">Observability</h1>
+    <p class="text-[12px] text-ink3/40 mb-6">Per-run intent-vs-outcome judge + trajectory signature, aggregated.</p>
+
+    <!-- Per-archetype rollup -->
+    <section class="mb-8">
+      <h2 class="text-sm font-medium text-ink mb-3">By archetype</h2>
+      <div class="bg-card border border-bd rounded-lg overflow-hidden">
+        <table class="w-full text-[13px]">
+          <thead class="bg-sf">
+            <tr class="text-left text-[11px] uppercase tracking-wider text-ink3/50">
+              <th class="px-3 py-2 font-medium">Archetype</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Runs</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Judged</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Avg fidelity</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Avg confidence</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Avg retries</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Avg tool kinds</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Avg reads/write</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Rollups}}
+            <tr class="border-t border-bd/50">
+              <td class="px-3 py-2 text-ink font-medium">{{.ArchetypeSlug}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{.RunCount}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{.JudgedCount}}</td>
+              <td class="px-3 py-2 tabular-nums {{if lt .AvgFidelity 0.0}}text-ink3/40{{else if lt .AvgFidelity 0.5}}text-red-400{{else if lt .AvgFidelity 0.8}}text-yellow-400{{else}}text-emerald-400{{end}}">
+                {{if lt .AvgFidelity 0.0}}&mdash;{{else}}{{printf "%.2f" .AvgFidelity}}{{end}}
+              </td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{if lt .AvgConfidence 0.0}}&mdash;{{else}}{{printf "%.2f" .AvgConfidence}}{{end}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{printf "%.1f" .AvgRetries}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{printf "%.1f" .AvgToolKinds}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{printf "%.1f" .AvgReadsPreWrite}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="8" class="px-3 py-6 text-center text-ink3/40">No evaluations yet. Run a task with the flag enabled.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Recent runs with eval -->
+    <section>
+      <h2 class="text-sm font-medium text-ink mb-3">Recent evaluated runs</h2>
+      <div class="bg-card border border-bd rounded-lg overflow-hidden">
+        <table class="w-full text-[13px]">
+          <thead class="bg-sf">
+            <tr class="text-left text-[11px] uppercase tracking-wider text-ink3/50">
+              <th class="px-3 py-2 font-medium">When</th>
+              <th class="px-3 py-2 font-medium">Issue</th>
+              <th class="px-3 py-2 font-medium">Agent</th>
+              <th class="px-3 py-2 font-medium">Status</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Fidelity</th>
+              <th class="px-3 py-2 font-medium">Drift</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Retries</th>
+              <th class="px-3 py-2 font-medium tabular-nums">Kinds</th>
+              <th class="px-3 py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Recent}}
+            <tr class="border-t border-bd/50 hover:bg-sf/30">
+              <td class="px-3 py-2 text-ink3/60 whitespace-nowrap">{{timeAgo .CreatedAt}}</td>
+              <td class="px-3 py-2 text-ac-t font-mono">{{if .IssueKey}}<a href="/issues/{{.IssueKey}}" class="hover:underline">{{.IssueKey}}</a>{{else}}&mdash;{{end}}</td>
+              <td class="px-3 py-2 text-ink2">{{.AgentName}} <span class="text-ink3/40">{{.ArchetypeSlug}}</span></td>
+              <td class="px-3 py-2"><span class="{{runStatusColor .Status}} inline-flex items-center px-2 py-0.5 rounded-full text-[11px]">{{.Status}}</span></td>
+              <td class="px-3 py-2 tabular-nums {{if not .Fidelity}}text-ink3/40{{else if lt (derefFloat .Fidelity) 0.5}}text-red-400{{else if lt (derefFloat .Fidelity) 0.8}}text-yellow-400{{else}}text-emerald-400{{end}}">
+                {{if .Fidelity}}{{printf "%.2f" (derefFloat .Fidelity)}}{{else}}&mdash;{{end}}
+              </td>
+              <td class="px-3 py-2 text-ink2">{{if .ScopeDrift}}{{.ScopeDrift}}{{else}}&mdash;{{end}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{.NRetries}}</td>
+              <td class="px-3 py-2 text-ink2 tabular-nums">{{.NToolKinds}}</td>
+              <td class="px-3 py-2"><a href="/runs/{{.RunID}}" class="text-[11px] text-ac-t hover:underline">open</a></td>
+            </tr>
+            {{else}}
+            <tr><td colspan="9" class="px-3 py-6 text-center text-ink3/40">No evaluated runs yet.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+</main>
+{{template "foot" .}}
